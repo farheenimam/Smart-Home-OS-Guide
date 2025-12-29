@@ -158,9 +158,9 @@ void run_device(Device* d, Device devices[]){
 // ---------------- PRINT DEVICE TABLE ----------------
 void print_device_table(Device devices[]){
     printf("\n[HUB] Current Device Table:\n");
-    printf("---------------------------------------------------------------\n");
-    printf("| %-18s | %-8s | %-12s |\n", "Device Name","Priority","State");
-    printf("---------------------------------------------------------------\n");
+    printf("+----------------------+----------+--------------+\n");
+    printf("| %-20s | %-8s | %-12s |\n", "Device Name","Priority","State");
+    printf("+----------------------+----------+--------------+\n");
     for(int i=0;i<DEVICE_COUNT;i++){
         char* state;
         switch(devices[i].state){
@@ -170,27 +170,27 @@ void print_device_table(Device devices[]){
             case TERMINATED: state="TERMINATED"; break;
             default: state="UNKNOWN";
         }
-        printf("| %-18s | %-8d | %-12s |\n", devices[i].name, devices[i].priority, state);
+        printf("| %-20s | %-8d | %-12s |\n", devices[i].name, devices[i].priority, state);
     }
-    printf("---------------------------------------------------------------\n");
+    printf("+----------------------+----------+--------------+\n");
 }
 
 // ---------------- PRINT SENSOR SUMMARY ----------------
 void print_sensor_summary(Device devices[]){
     printf("\n[HUB] Average Sensor Readings per Device:\n");
-    printf("--------------------------------------------------------------------------------------\n");
-    printf("| %-18s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s |\n",
+    printf("+----------------------+------------+------------+------------+------------+------------+------------+\n");
+    printf("| %-20s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s |\n",
            "Device","S1 Temp","S2 Hum","S3 Light","S4 Motion","S5 Gas","S6 Noise");
-    printf("--------------------------------------------------------------------------------------\n");
+    printf("+----------------------+------------+------------+------------+------------+------------+------------+\n");
     for(int i=0;i<DEVICE_COUNT;i++){
-        printf("| %-18s", devices[i].name);
+        printf("| %-20s", devices[i].name);
         for(int j=0;j<SENSOR_COUNT;j++){
             int avg = devices[i].sensor_count[j]==0?0:devices[i].sensor_sum[j]/devices[i].sensor_count[j];
             printf(" | %-10d", avg);
         }
         printf(" |\n");
     }
-    printf("--------------------------------------------------------------------------------------\n");
+    printf("+----------------------+------------+------------+------------+------------+------------+------------+\n");
 }
 
 // ---------------- MAIN ----------------
