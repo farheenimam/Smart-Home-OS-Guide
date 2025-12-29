@@ -84,7 +84,7 @@ void* sensor_thread(void* arg){
     SensorArg* s = (SensorArg*)arg;
     Device* d = s->device;
 
-    printf("[%s] [THREAD] %-30s | Requesting resources          |\n", current_time(), s->name);
+    printf("[%s] [THREAD] %-35s | Requesting resources                    |\n", current_time(), s->name);
 
     int locked[RESOURCE_COUNT] = {0};
     int acquired = 0;
@@ -104,10 +104,10 @@ void* sensor_thread(void* arg){
             for(int i=0;i<RESOURCE_COUNT;i++)
                 if(locked[i]) { pthread_mutex_unlock(&resources[i]); locked[i]=0; }
             d->state = WAITING;
-            printf("[%s] [THREAD] %-30s | WAITING (Resources Busy)      |\n", current_time(), s->name);
+            printf("[%s] [THREAD] %-35s | WAITING (Resources Busy)                  |\n", current_time(), s->name);
             sleep(1);
             if(time(NULL)-start_wait >= WAIT_THRESHOLD)
-                printf("[%s] [ALERT] %-30s | Waiting >%d sec!               |\n", current_time(), s->name, WAIT_THRESHOLD);
+                printf("[%s] [ALERT] %-35s | Waiting >%d sec!                       |\n", current_time(), s->name, WAIT_THRESHOLD);
         }
     }
 
@@ -116,13 +116,13 @@ void* sensor_thread(void* arg){
     d->sensor_sum[s->sensor_index] += data;
     d->sensor_count[s->sensor_index]++;
 
-    printf("[%s] [THREAD] %-30s | Resources Allocated | Sensor Data: %-3d |\n", current_time(), s->name, data);
+    printf("[%s] [THREAD] %-35s | Resources Allocated | Sensor Data: %-3d        |\n", current_time(), s->name, data);
     sleep(1);
 
     for(int i=0;i<RESOURCE_COUNT;i++)
         if(locked[i]) pthread_mutex_unlock(&resources[i]);
 
-    printf("[%s] [THREAD] %-30s | Resources Released                     |\n", current_time(), s->name);
+    printf("[%s] [THREAD] %-35s | Resources Released                             |\n", current_time(), s->name);
     free(s);
     pthread_exit(NULL);
 }
@@ -130,12 +130,12 @@ void* sensor_thread(void* arg){
 // ---------------- DEVICE FUNCTION ----------------
 void run_device(Device* d, Device devices[]){
     if(d->depends_on!=-1){
-        printf("[%s] [PROCESS] %-20s | Waiting for dependency: %-20s |\n", current_time(), d->name, devices[d->depends_on].name);
+        printf("[%s] [PROCESS] %-20s | Waiting for dependency: %-25s |\n", current_time(), d->name, devices[d->depends_on].name);
         sleep(2);
     }
 
     d->state = RUNNING;
-    printf("[%s] [PROCESS] %-20s | Priority: %-3d | STATE: RUNNING  |\n", current_time(), d->name, d->priority);
+    printf("[%s] [PROCESS] %-20s | Priority: %-3d | STATE: RUNNING             |\n", current_time(), d->name, d->priority);
 
     pthread_t threads[SENSOR_COUNT];
     for(int i=0;i<SENSOR_COUNT;i++){
@@ -151,7 +151,7 @@ void run_device(Device* d, Device devices[]){
         pthread_join(threads[i], NULL);
 
     d->state = TERMINATED;
-    printf("[%s] [PROCESS] %-20s | STATE CHANGED → TERMINATED    |\n", current_time(), d->name);
+    printf("[%s] [PROCESS] %-20s | STATE CHANGED → TERMINATED                |\n", current_time(), d->name);
     sleep(1);
 }
 
@@ -233,9 +233,9 @@ int main(){
     sleep(3);
 
     for(int i=0;i<DEVICE_COUNT;i++){
-        printf("\n+----------------------------------------------------------+\n");
-        printf("| [HUB] Dispatching Device: %-30s |\n", devices[i].name);
-        printf("+----------------------------------------------------------+\n");
+        printf("\n+------------------------------------------------------------------+\n");
+        printf("| [HUB] Dispatching Device: %-42s |\n", devices[i].name);
+        printf("+------------------------------------------------------------------+\n");
         run_device(&devices[i], devices);
         sleep(1);
     }
