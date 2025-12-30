@@ -29,6 +29,24 @@ Features:
 #define RESOURCE_COUNT 6
 #define WAIT_THRESHOLD 3 // seconds
 
+// ---------------- ANSI COLOR CODES ----------------
+#define RESET   "\033[0m"
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define BLUE    "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN    "\033[36m"
+#define WHITE   "\033[37m"
+#define BRIGHT_RED     "\033[91m"
+#define BRIGHT_GREEN   "\033[92m"
+#define BRIGHT_YELLOW  "\033[93m"
+#define BRIGHT_BLUE    "\033[94m"
+#define BRIGHT_MAGENTA "\033[95m"
+#define BRIGHT_CYAN    "\033[96m"
+#define BRIGHT_WHITE   "\033[97m"
+#define BOLD    "\033[1m"
+
 #define READY 0
 #define RUNNING 1
 #define WAITING 2
@@ -84,12 +102,13 @@ void* sensor_thread(void* arg){
     SensorArg* s = (SensorArg*)arg;
     Device* d = s->device;
 
-    printf("[%s] [THREAD] %-30s | Requesting resources\n", current_time(), s->name);
+    printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " YELLOW "Requesting resources" RESET "                    \n", current_time(), s->name);
 
     int locked[RESOURCE_COUNT] = {0};
     int acquired = 0;
     time_t start_wait = time(NULL);
 
+    // Helps in deadlock avoidance, checks which resource is available
     while(!acquired){
         acquired = 1;
         for(int i=0;i<RESOURCE_COUNT;i++){
@@ -104,10 +123,10 @@ void* sensor_thread(void* arg){
             for(int i=0;i<RESOURCE_COUNT;i++)
                 if(locked[i]) { pthread_mutex_unlock(&resources[i]); locked[i]=0; }
             d->state = WAITING;
-            printf("[%s] [THREAD] %-30s | WAITING (Resources Busy)\n", current_time(), s->name);
-            sleep(1);
+            printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " BRIGHT_RED "WAITING (Resources Busy)" RESET "                  \n", current_time(), s->name);
+            sleep(0.5);
             if(time(NULL)-start_wait >= WAIT_THRESHOLD)
-                printf("[%s] [ALERT] %-30s has been waiting >%d sec!\n", current_time(), s->name, WAIT_THRESHOLD);
+                printf(BRIGHT_RED "[%s] [ALERT] " BOLD "%-35s " RESET BRIGHT_RED "| " BOLD "Waiting >%d sec!" RESET BRIGHT_RED "                       " RESET "\n", current_time(), s->name, WAIT_THRESHOLD);
         }
     }
 
@@ -116,26 +135,28 @@ void* sensor_thread(void* arg){
     d->sensor_sum[s->sensor_index] += data;
     d->sensor_count[s->sensor_index]++;
 
-    printf("[%s] [THREAD] %-30s | Resources Allocated | Sensor Data: %d\n", current_time(), s->name, data);
+    printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " BRIGHT_GREEN "Resources Allocated" RESET " | " YELLOW "Sensor Data: " BRIGHT_YELLOW "%-3d" RESET "   \n", current_time(), s->name, data);
     sleep(1);
-
+    // releasing resources after they are completed
     for(int i=0;i<RESOURCE_COUNT;i++)
         if(locked[i]) pthread_mutex_unlock(&resources[i]);
 
-    printf("[%s] [THREAD] %-30s | Resources Released\n", current_time(), s->name);
+    printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " GREEN "Resources Released" RESET "                             \n", current_time(), s->name);
     free(s);
     pthread_exit(NULL);
 }
 
 // ---------------- DEVICE FUNCTION ----------------
+// executes the devices, creates sensor threads, waits for them to finish
 void run_device(Device* d, Device devices[]){
+    //checks if the device is waiting for another device, -1 no dependency
     if(d->depends_on!=-1){
-        printf("[%s] [PROCESS] %-20s | Waiting for dependency: %s\n", current_time(), d->name, devices[d->depends_on].name);
+        printf(CYAN "[%s] " WHITE "[PROCESS] " BRIGHT_BLUE "%-20s " RESET "| " YELLOW "Waiting for dependency: " BRIGHT_YELLOW "%-25s " RESET "\n", current_time(), d->name, devices[d->depends_on].name);
         sleep(2);
     }
 
     d->state = RUNNING;
-    printf("[%s] [PROCESS] %-20s | Priority: %d | STATE: RUNNING\n", current_time(), d->name, d->priority);
+    printf(CYAN "[%s] " WHITE "[PROCESS] " BRIGHT_BLUE "%-20s " RESET "| " MAGENTA "Priority: " BRIGHT_MAGENTA "%-3d" RESET " | " BRIGHT_GREEN "STATE: RUNNING" RESET "             \n", current_time(), d->name, d->priority);
 
     pthread_t threads[SENSOR_COUNT];
     for(int i=0;i<SENSOR_COUNT;i++){
@@ -151,57 +172,73 @@ void run_device(Device* d, Device devices[]){
         pthread_join(threads[i], NULL);
 
     d->state = TERMINATED;
-    printf("[%s] [PROCESS] %-20s | STATE CHANGED → TERMINATED\n", current_time(), d->name);
+    printf(CYAN "[%s] " WHITE "[PROCESS] " BRIGHT_BLUE "%-20s " RESET "              | " YELLOW "STATE CHANGED → " RED "TERMINATED" RESET "                \n", current_time(), d->name);
     sleep(1);
 }
 
 // ---------------- PRINT DEVICE TABLE ----------------
 void print_device_table(Device devices[]){
-    printf("\n[HUB] Current Device Table:\n");
-    printf("---------------------------------------------------------------\n");
-    printf("| %-18s | %-8s | %-12s |\n", "Device Name","Priority","State");
-    printf("---------------------------------------------------------------\n");
+    printf("\n" BRIGHT_CYAN BOLD "[HUB] Current Device Table:" RESET "\n");
+    printf(BRIGHT_WHITE "+----------------------+----------+--------------+\n" RESET);
+    printf(BRIGHT_WHITE "| " RESET BOLD "%-20s " RESET BRIGHT_WHITE "| " RESET BOLD "%-8s " RESET BRIGHT_WHITE "| " RESET BOLD "%-12s " RESET BRIGHT_WHITE "|\n" RESET, "Device Name","Priority","State");
+    printf(BRIGHT_WHITE "+----------------------+----------+--------------+\n" RESET);
     for(int i=0;i<DEVICE_COUNT;i++){
         char* state;
+        char* state_color;
         switch(devices[i].state){
-            case READY: state="READY"; break;
-            case RUNNING: state="RUNNING"; break;
-            case WAITING: state="WAITING"; break;
-            case TERMINATED: state="TERMINATED"; break;
-            default: state="UNKNOWN";
+            case READY: state="READY"; state_color=BRIGHT_GREEN; break;
+            case RUNNING: state="RUNNING"; state_color=BRIGHT_YELLOW; break;
+            case WAITING: state="WAITING"; state_color=BRIGHT_RED; break;
+            case TERMINATED: state="TERMINATED"; state_color=RED; break;
+            default: state="UNKNOWN"; state_color=WHITE;
         }
-        printf("| %-18s | %-8d | %-12s |\n", devices[i].name, devices[i].priority, state);
+        printf(BRIGHT_WHITE "| " RESET CYAN "%-20s " RESET BRIGHT_WHITE "| " RESET MAGENTA "%-8d " RESET BRIGHT_WHITE "| " RESET "%s%-12s" RESET BRIGHT_WHITE " |\n" RESET, devices[i].name, devices[i].priority, state_color, state);
     }
-    printf("---------------------------------------------------------------\n");
+    printf(BRIGHT_WHITE "+----------------------+----------+--------------+\n" RESET);
 }
 
 // ---------------- PRINT SENSOR SUMMARY ----------------
 void print_sensor_summary(Device devices[]){
-    printf("\n[HUB] Average Sensor Readings per Device:\n");
-    printf("--------------------------------------------------------------------------------------\n");
-    printf("| %-18s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s |\n",
+    printf("\n" BRIGHT_CYAN BOLD "[HUB] Average Sensor Readings per Device:" RESET "\n");
+    printf(BRIGHT_WHITE "+----------------------+------------+------------+------------+------------+------------+------------+\n" RESET);
+    printf(BRIGHT_WHITE "| " RESET BOLD "%-20s " RESET BRIGHT_WHITE "| " RESET BOLD "%-10s " RESET BRIGHT_WHITE "| " RESET BOLD "%-10s " RESET BRIGHT_WHITE "| " RESET BOLD "%-10s " RESET BRIGHT_WHITE "| " RESET BOLD "%-10s " RESET BRIGHT_WHITE "| " RESET BOLD "%-10s " RESET BRIGHT_WHITE "| " RESET BOLD "%-10s " RESET BRIGHT_WHITE "|\n" RESET,
            "Device","S1 Temp","S2 Hum","S3 Light","S4 Motion","S5 Gas","S6 Noise");
-    printf("--------------------------------------------------------------------------------------\n");
+    printf(BRIGHT_WHITE "+----------------------+------------+------------+------------+------------+------------+------------+\n" RESET);
     for(int i=0;i<DEVICE_COUNT;i++){
-        printf("| %-18s", devices[i].name);
+        printf(BRIGHT_WHITE "| " RESET CYAN "%-20s" RESET, devices[i].name);
         for(int j=0;j<SENSOR_COUNT;j++){
             int avg = devices[i].sensor_count[j]==0?0:devices[i].sensor_sum[j]/devices[i].sensor_count[j];
-            printf(" | %-10d", avg);
+            printf(BRIGHT_WHITE " | " RESET YELLOW "%-10d" RESET, avg);
         }
-        printf(" |\n");
+        printf(BRIGHT_WHITE " |\n" RESET);
     }
-    printf("--------------------------------------------------------------------------------------\n");
+    printf(BRIGHT_WHITE "+----------------------+------------+------------+------------+------------+------------+------------+\n" RESET);
+}
+
+// ---------------- PRINT PROJECT TITLE ----------------
+void print_project_title(){
+    printf("\n");
+    printf(BRIGHT_CYAN BOLD "\t\t╔═══════════════════════════════════════════════════════════════╗\n" RESET);
+    printf(BRIGHT_CYAN BOLD "\t\t║" RESET);
+    printf(BRIGHT_WHITE BOLD "\t         SMART HOME OS HUB SIMULATION SYSTEM" RESET);
+    printf(BRIGHT_CYAN BOLD "\t        ║\n" RESET);
+    printf(BRIGHT_CYAN BOLD "\t\t║" RESET);
+    printf(WHITE "\t          Operating Systems Semester Project" RESET);
+    printf(BRIGHT_CYAN BOLD "            ║\n" RESET);
+    printf(BRIGHT_CYAN BOLD "\t\t╚═══════════════════════════════════════════════════════════════╝\n" RESET);
+    printf("\n");
 }
 
 // ---------------- MAIN ----------------
 int main(){
-    printf("\n================ SMART HOME OS HUB STARTED ================\n");
+    print_project_title();
     sleep(2);
 
     for(int i=0;i<RESOURCE_COUNT;i++)
         pthread_mutex_init(&resources[i], NULL);
 
     Device devices[DEVICE_COUNT] = {
+        // Name, Priority, State, Depends_on, Sensor_sum[], Sensor_count[]
         {"Security Camera",1,READY,-1,{0},{0}},
         {"Air Conditioner",2,READY,-1,{0},{0}},
         {"Smart Door Lock",2,READY,0,{0},{0}},
@@ -219,30 +256,46 @@ int main(){
         {"Door Sensor",1,READY,-1,{0},{0}}
     };
 
-    printf("\n[HUB] Initializing Device Table (STATE: READY)\n");
+    printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET YELLOW "Initializing Device Table " RESET "(" BRIGHT_GREEN "STATE: READY" RESET ")\n");
     print_device_table(devices);
     sleep(2);
 
-    printf("\n[HUB] Applying Priority Scheduling\n");
+    printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET BRIGHT_YELLOW BOLD "Applying Priority Scheduling" RESET "\n");
+    printf(BRIGHT_WHITE "+----+----------------------+----------+\n" RESET);
+    printf(BRIGHT_WHITE "| " RESET BOLD "No " RESET BRIGHT_WHITE "| " RESET BOLD "%-20s " RESET BRIGHT_WHITE "| " RESET BOLD "Priority " RESET BRIGHT_WHITE "|\n" RESET, "Device Name");
+    printf(BRIGHT_WHITE "+----+----------------------+----------+\n" RESET);
     for(int i=0;i<DEVICE_COUNT;i++)
-        printf("[%s] Execution Order: %d → %s\n", current_time(), i+1, devices[i].name);
+        printf(BRIGHT_WHITE "| " RESET YELLOW "%-2d " RESET BRIGHT_WHITE "| " RESET CYAN "%-20s " RESET BRIGHT_WHITE "| " RESET MAGENTA "%-8d " RESET BRIGHT_WHITE "|\n" RESET, i+1, devices[i].name, devices[i].priority);
+    printf(BRIGHT_WHITE "+----+----------------------+----------+\n" RESET);
     sleep(3);
 
     for(int i=0;i<DEVICE_COUNT;i++){
-        printf("\n[HUB] Dispatching Device → %s\n", devices[i].name);
+        printf("\n" BRIGHT_CYAN "+--------------------------------------------------------------------------------------------+\n" RESET);
+        printf(BRIGHT_CYAN "| " RESET BRIGHT_CYAN BOLD "                 [HUB] " RESET BRIGHT_YELLOW "Dispatching Device: " RESET BRIGHT_WHITE BOLD "%-42s " RESET BRIGHT_CYAN "      |\n" RESET, devices[i].name);
+        printf(BRIGHT_CYAN "+--------------------------------------------------------------------------------------------+\n" RESET);
         run_device(&devices[i], devices);
         sleep(1);
     }
 
-    printf("\n[HUB] Resource Usage Summary:\n");
+    printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET BRIGHT_YELLOW BOLD "Resource Usage Summary:" RESET "\n");
+    printf(BRIGHT_WHITE "+----------------------+------------------+\n" RESET);
+    printf(BRIGHT_WHITE "| " RESET BOLD "%-20s " RESET BRIGHT_WHITE "| " RESET BOLD "%-16s " RESET BRIGHT_WHITE "|\n" RESET, "Resource", "Usage Count");
+    printf(BRIGHT_WHITE "+----------------------+------------------+\n" RESET);
     for(int i=0;i<RESOURCE_COUNT;i++)
-        printf("    %-10s used: %d times\n", resource_names[i], resource_usage[i]);
+        printf(BRIGHT_WHITE "| " RESET CYAN "%-20s " RESET BRIGHT_WHITE "| " RESET YELLOW "%-16d " RESET BRIGHT_WHITE "|\n" RESET, resource_names[i], resource_usage[i]);
+    printf(BRIGHT_WHITE "+----------------------+------------------+\n" RESET);
 
     print_sensor_summary(devices);
 
     for(int i=0;i<RESOURCE_COUNT;i++)
         pthread_mutex_destroy(&resources[i]);
 
-    printf("\n================ SMART HOME OS HUB TERMINATED ================\n");
+    printf("\n");
+    printf(BRIGHT_CYAN BOLD "\t\t╔═══════════════════════════════════════════════════════════════╗\n" RESET);
+    printf(BRIGHT_CYAN BOLD "\t\t║" RESET);
+    printf(BRIGHT_WHITE BOLD "\t\t                SMART HOME OS HUB TERMINATED" RESET);
+    printf(BRIGHT_CYAN BOLD "                  ║\n" RESET);
+    printf(BRIGHT_CYAN BOLD "\t\t╚═══════════════════════════════════════════════════════════════╝\n" RESET);
+    printf("\n");
     return 0;
 }
