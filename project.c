@@ -143,6 +143,23 @@ void* sensor_thread(void* arg){
     pthread_exit(NULL);
 }
 
+// ---------------- SORT DEVICES BY PRIORITY (PRIORITY QUEUE) ----------------
+// Bubble sort algorithm: Sort devices by priority (lower number = higher priority)
+void sort_devices_by_priority(Device devices[]){
+    // Priority queue implementation using bubble sort
+    for(int i = 0; i < DEVICE_COUNT; i++){
+        for(int j = i + 1; j < DEVICE_COUNT; j++){
+            // If current device has higher priority number (lower priority), swap
+            if(devices[i].priority > devices[j].priority){
+                // Swap devices - put lower priority number first
+                Device temp = devices[i];
+                devices[i] = devices[j];
+                devices[j] = temp;
+            }
+        }
+    }
+}
+
 // ---------------- DEVICE FUNCTION ----------------
 // executes the devices, creates sensor threads, waits for them to finish
 void run_device(Device* d, Device devices[]){
@@ -255,6 +272,10 @@ int main(){
     printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET YELLOW "Initializing Device Table " RESET "(" BRIGHT_GREEN "STATE: READY" RESET ")\n");
     print_device_table(devices);
     sleep(2);
+
+    printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET BRIGHT_YELLOW BOLD "Sorting Devices by Priority (Priority Queue Algorithm)..." RESET "\n");
+    sort_devices_by_priority(devices);
+    sleep(1);
 
     printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET BRIGHT_YELLOW BOLD "Applying Priority Scheduling" RESET "\n");
     printf(BRIGHT_WHITE "+----+----------------------+----------+\n" RESET);
