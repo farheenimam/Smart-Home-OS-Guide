@@ -60,6 +60,7 @@ typedef struct {
     int priority;
     int state;
     int depends_on; // -1 if none
+    int sensor_data[SENSOR_COUNT]; 
     int pipe_fd[2]; // pipe: [0]=read, [1]=write
 } Device;
 
@@ -117,10 +118,10 @@ void* sensor_thread(void* arg){
 
     d->state = RUNNING;
     int data = generate_sensor_data(s->sensor_index);
+    d->sensor_data[s->sensor_index] = data;
 
     // ---------------- SEND DATA TO HUB ----------------
     write(d->pipe_fd[1], &data, sizeof(int));
-
     printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " BRIGHT_GREEN "Resources Allocated" RESET " | " YELLOW "Sensor Data: " BRIGHT_YELLOW "%-3d" RESET "   \n", current_time(), s->name, data);
     sleep(1);
 
@@ -172,7 +173,7 @@ void run_device(Device* d, Device devices[]){
     for(int i=0;i<SENSOR_COUNT;i++){
         int sensor_value;
         read(d->pipe_fd[0], &sensor_value, sizeof(int));
-        printf(BRIGHT_CYAN "[%s] " WHITE "[HUB]    " BRIGHT_CYAN "%s received Sensor %d: "YELLOW "%d\n" RESET, current_time(), d->name, i+1, sensor_value);
+          printf(BRIGHT_CYAN "[%s] " WHITE "[HUB]    " BRIGHT_CYAN "%s received Sensor %d: "YELLOW "%d\n" RESET, current_time(), d->name, i+1, sensor_value);
     }
 
     d->state = TERMINATED;
@@ -211,9 +212,7 @@ void print_sensor_summary(Device devices[]){
     for(int i=0;i<DEVICE_COUNT;i++){
         printf(BRIGHT_WHITE "| " RESET CYAN "%-20s" RESET, devices[i].name);
         for(int j=0;j<SENSOR_COUNT;j++){
-            int sensor_value;
-            read(devices[i].pipe_fd[0], &sensor_value, sizeof(int));
-            printf(BRIGHT_WHITE " | " RESET YELLOW "%-10d" RESET, sensor_value);
+            printf(BRIGHT_WHITE " | " RESET YELLOW "%-10d" RESET, devices[i].sensor_data[j]);
         }
         printf(BRIGHT_WHITE " |\n" RESET);
     }
