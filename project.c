@@ -1,27 +1,15 @@
-/*
+/* 
 =========================================================================
 Smart Home OS Hub Simulation
 Semester Project – Operating Systems (40 Marks)
-
-Features:
-1. Devices = simulated processes
-2. Threads manage sensors (6 sensors per device)
-3. Inter-thread communication and shared resource handling
-4. Priority Scheduling with dependencies
-5. Deadlock avoidance using trylock
-6. Waiting queues + alerts
-7. Average sensor readings per device
-8. Resource usage summary
-9. Timestamps for all actions
-10. Gradual execution for live demo
-=========================================================================
+========================================================================= 
 */
 
-#include <stdio.h> // printf, sprintf
-#include <stdlib.h> // malloc, free, rand, srand
-#include <pthread.h> // pthreads, mutexes
-#include <unistd.h> // sleep, pipe, read, write, close
-#include <time.h> // time, localtime, struct tm
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <time.h>
 
 // Macros
 #define DEVICE_COUNT 15
@@ -59,9 +47,9 @@ int resource_usage[RESOURCE_COUNT] = {0};
 
 // ---------------- TIME ----------------
 char* current_time() {
-    static char buf[20]; // memory remains valid after function returns
+    static char buf[20];
     time_t now = time(NULL);
-    struct tm *t = localtime(&now); // readable format
+    struct tm *t = localtime(&now);
     snprintf(buf, sizeof(buf), "%02d:%02d:%02d", t->tm_hour, t->tm_min, t->tm_sec);
     return buf;
 }
@@ -72,7 +60,7 @@ typedef struct {
     int priority;
     int state;
     int depends_on; // -1 if none
-    int sensor_data[SENSOR_COUNT]; 
+    int pipe_fd[2]; // pipe: [0]=read, [1]=write
 } Device;
 
 // ---------------- SENSOR THREAD ARG ----------------
@@ -80,19 +68,17 @@ typedef struct {
     Device* device;
     char name[100];
     int sensor_index;
-    int pipe_fd[2];
-    pipe(pipe_fd); // pipe file descriptors for each sensor [0]=read, [1]=write
 } SensorArg;
 
 // ---------------- SENSOR DATA ----------------
 int generate_sensor_data(int index){
     switch(index){
-        case 0: return 18 + rand()%13;   // Temp
-        case 1: return 20 + rand()%61;   // Humidity
-        case 2: return rand()%101;        // Light
-        case 3: return rand()%2;          // Motion
-        case 4: return rand()%201;        // Gas
-        case 5: return rand()%100;        // Noise
+        case 0: return 18 + rand()%13;
+        case 1: return 20 + rand()%61;
+        case 2: return rand()%101;
+        case 3: return rand()%2;
+        case 4: return rand()%201;
+        case 5: return rand()%100;
         default: return rand()%100;
     }
 }
@@ -100,7 +86,7 @@ int generate_sensor_data(int index){
 // ---------------- SENSOR THREAD ----------------
 void* sensor_thread(void* arg){
     SensorArg* s = (SensorArg*)arg;
-    Device* d = s->device;  // jo device sensor use krrhi hn
+    Device* d = s->device;
 
     printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " YELLOW "Requesting resources" RESET "                    \n", current_time(), s->name);
 
@@ -108,18 +94,17 @@ void* sensor_thread(void* arg){
     int acquired = 0;
     time_t start_wait = time(NULL);
 
-    // Helps in deadlock avoidance, checks which resource is available
-    while(!acquired){ // Jab tk true hn
+    while(!acquired){
         acquired = 1;
         for(int i=0;i<RESOURCE_COUNT;i++){
-            if(pthread_mutex_trylock(&resources[i])==0){ // checks if the resource is unlocked
+            if(pthread_mutex_trylock(&resources[i])==0){
                 locked[i]=1;
                 resource_usage[i]++;
             } else {
                 acquired = 0;
             }
         }
-        if(!acquired){ 
+        if(!acquired){
             for(int i=0;i<RESOURCE_COUNT;i++)
                 if(locked[i]) { pthread_mutex_unlock(&resources[i]); locked[i]=0; }
             d->state = WAITING;
@@ -132,34 +117,26 @@ void* sensor_thread(void* arg){
 
     d->state = RUNNING;
     int data = generate_sensor_data(s->sensor_index);
-    
-    // Write data through pipe instead of direct assignment
-    write(s->pipe_fd[1], &data, sizeof(int));
-    
+
+    // ---------------- SEND DATA TO HUB ----------------
+    write(d->pipe_fd[1], &data, sizeof(int));
+
     printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " BRIGHT_GREEN "Resources Allocated" RESET " | " YELLOW "Sensor Data: " BRIGHT_YELLOW "%-3d" RESET "   \n", current_time(), s->name, data);
-    printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " MAGENTA "Data written to pipe" RESET "             \n", current_time(), s->name);
     sleep(1);
-    // releasing resources after they are completed
+
     for(int i=0;i<RESOURCE_COUNT;i++)
         if(locked[i]) pthread_mutex_unlock(&resources[i]);
 
     printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " GREEN "Resources Released" RESET "                             \n", current_time(), s->name);
-    
-    // Close write end of pipe (sensor done writing)
-    close(s->pipe_fd[1]);
-    
     free(s);
     pthread_exit(NULL);
 }
 
-// ---------------- SORT DEVICES BY PRIORITY (PRIORITY QUEUE) ----------------
+// ---------------- SORT DEVICES BY PRIORITY ----------------
 void sort_devices_by_priority(Device devices[]){
-    // Priority queue implementation using bubble sort
     for(int i = 0; i < DEVICE_COUNT; i++){
         for(int j = i + 1; j < DEVICE_COUNT; j++){
-            // If current device has higher priority number (lower priority), swap
             if(devices[i].priority > devices[j].priority){
-                // Swap devices - put lower priority number first
                 Device temp = devices[i];
                 devices[i] = devices[j];
                 devices[j] = temp;
@@ -169,9 +146,7 @@ void sort_devices_by_priority(Device devices[]){
 }
 
 // ---------------- DEVICE FUNCTION ----------------
-// executes the devices, creates sensor threads, waits for them to finish
 void run_device(Device* d, Device devices[]){
-    //checks if the device is waiting for another device, -1 no dependency
     if(d->depends_on!=-1){
         printf(CYAN "[%s] " WHITE "[PROCESS] " BRIGHT_BLUE "%-20s " RESET "| " YELLOW "Waiting for dependency: " BRIGHT_YELLOW "%-25s " RESET "\n", current_time(), d->name, devices[d->depends_on].name);
         sleep(2);
@@ -181,45 +156,23 @@ void run_device(Device* d, Device devices[]){
     printf(CYAN "[%s] " WHITE "[PROCESS] " BRIGHT_BLUE "%-20s " RESET "| " MAGENTA "Priority: " BRIGHT_MAGENTA "%-3d" RESET " | " BRIGHT_GREEN "STATE: RUNNING" RESET "             \n", current_time(), d->name, d->priority);
 
     pthread_t threads[SENSOR_COUNT];
-    SensorArg* sensor_args[SENSOR_COUNT]; // Store args for reading from pipes later
-    
-    // Create pipe for each sensor and start threads
     for(int i=0;i<SENSOR_COUNT;i++){
         SensorArg* s = malloc(sizeof(SensorArg));
         snprintf(s->name, sizeof(s->name), "%s - Sensor %d", d->name, i+1);
         s->device = d;
         s->sensor_index = i;
-        
-        // Create pipe for this sensor
-        if(pipe(s->pipe_fd) == -1){
-            printf("Error: Pipe creation failed for sensor %d!\n", i);
-            free(s);
-            continue;
-        }
-        
-        sensor_args[i] = s; // Save for reading later
         pthread_create(&threads[i], NULL, sensor_thread, s);
         sleep(1);
     }
 
-    // Wait for all threads to complete
     for(int i=0;i<SENSOR_COUNT;i++)
         pthread_join(threads[i], NULL);
-    
-    // Read data from pipes and save to device structure
-    printf(BRIGHT_CYAN BOLD "[HUB] " RESET GREEN "Reading sensor data from pipes for %s..." RESET "\n", d->name);
+
+    // ---------------- READ DATA FROM PIPE ----------------
     for(int i=0;i<SENSOR_COUNT;i++){
-        int sensor_data = 0;
-        read(sensor_args[i]->pipe_fd[0], &sensor_data, sizeof(int));
-        d->sensor_data[i] = sensor_data;
-        printf(BRIGHT_CYAN BOLD "[HUB] " RESET GREEN "Read from pipe | " RESET CYAN "%s " RESET YELLOW "Sensor %d: %d" RESET "\n", 
-               d->name, i+1, sensor_data);
-        
-        // Close read end of pipe
-        close(sensor_args[i]->pipe_fd[0]);
-        
-        // Free the sensor argument
-        free(sensor_args[i]);
+        int sensor_value;
+        read(d->pipe_fd[0], &sensor_value, sizeof(int));
+        printf(BRIGHT_CYAN "[%s] " WHITE "[HUB]    " BRIGHT_CYAN "%s received Sensor %d: "YELLOW "%d\n" RESET, current_time(), d->name, i+1, sensor_value);
     }
 
     d->state = TERMINATED;
@@ -258,7 +211,9 @@ void print_sensor_summary(Device devices[]){
     for(int i=0;i<DEVICE_COUNT;i++){
         printf(BRIGHT_WHITE "| " RESET CYAN "%-20s" RESET, devices[i].name);
         for(int j=0;j<SENSOR_COUNT;j++){
-            printf(BRIGHT_WHITE " | " RESET YELLOW "%-10d" RESET, devices[i].sensor_data[j]);
+            int sensor_value;
+            read(devices[i].pipe_fd[0], &sensor_value, sizeof(int));
+            printf(BRIGHT_WHITE " | " RESET YELLOW "%-10d" RESET, sensor_value);
         }
         printf(BRIGHT_WHITE " |\n" RESET);
     }
@@ -288,7 +243,6 @@ int main(){
         pthread_mutex_init(&resources[i], NULL);
 
     Device devices[DEVICE_COUNT] = {
-        // Name, Priority, State, Depends_on, Sensor_data[]
         {"Security Camera",1,READY,-1,{0}},
         {"Air Conditioner",2,READY,-1,{0}},
         {"Smart Door Lock",2,READY,0,{0},},
@@ -306,9 +260,13 @@ int main(){
         {"Door Sensor",1,READY,-1,{0}}
     };
 
-    printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET YELLOW "Initializing Device Table " RESET "(" BRIGHT_GREEN "STATE: READY" RESET ")\n");
+    printf("\n" BRIGHT_CYAN BOLD "  [HUB] " RESET YELLOW "Initializing Device Table " RESET "(" BRIGHT_GREEN "STATE: READY" RESET ")\n");
     print_device_table(devices);
     sleep(2);
+
+    // ---------------- CREATE PIPES FOR DEVICES ----------------
+    for(int i=0;i<DEVICE_COUNT;i++)
+        pipe(devices[i].pipe_fd);
 
     printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET BRIGHT_YELLOW BOLD "Sorting Devices by Priority (Priority Queue Algorithm)..." RESET "\n");
     sort_devices_by_priority(devices);
@@ -342,7 +300,7 @@ int main(){
     printf("\n");
     printf(BRIGHT_CYAN BOLD "\t\t╔═══════════════════════════════════════════════════════════════╗\n" RESET);
     printf(BRIGHT_CYAN BOLD "\t\t║" RESET);
-    printf(BRIGHT_WHITE BOLD "\t                SMART HOME OS HUB TERMINATED" RESET);
+    printf(BRIGHT_WHITE BOLD "\t               SMART HOME OS HUB TERMINATED" RESET);
     printf(BRIGHT_CYAN BOLD "             ║\n" RESET);
     printf(BRIGHT_CYAN BOLD "\t\t╚═══════════════════════════════════════════════════════════════╝\n" RESET);
     printf("\n");
