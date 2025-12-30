@@ -20,7 +20,7 @@ Features:
 #include <stdio.h> // printf, sprintf
 #include <stdlib.h> // malloc, free, rand, srand
 #include <pthread.h> // pthreads, mutexes
-#include <unistd.h> // sleep
+#include <unistd.h> // sleep, pipe, read, write, close
 #include <time.h> // time, localtime, struct tm
 
 // Macros
@@ -80,6 +80,8 @@ typedef struct {
     Device* device;
     char name[100];
     int sensor_index;
+    int pipe_fd[2];
+    pipe(pipe_fd); // pipe file descriptors for each sensor [0]=read, [1]=write
 } SensorArg;
 
 // ---------------- SENSOR DATA ----------------
@@ -130,15 +132,22 @@ void* sensor_thread(void* arg){
 
     d->state = RUNNING;
     int data = generate_sensor_data(s->sensor_index);
-    d->sensor_data[s->sensor_index] = data;
-
+    
+    // Write data through pipe instead of direct assignment
+    write(s->pipe_fd[1], &data, sizeof(int));
+    
     printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " BRIGHT_GREEN "Resources Allocated" RESET " | " YELLOW "Sensor Data: " BRIGHT_YELLOW "%-3d" RESET "   \n", current_time(), s->name, data);
+    printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " MAGENTA "Data written to pipe" RESET "             \n", current_time(), s->name);
     sleep(1);
     // releasing resources after they are completed
     for(int i=0;i<RESOURCE_COUNT;i++)
         if(locked[i]) pthread_mutex_unlock(&resources[i]);
 
     printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " GREEN "Resources Released" RESET "                             \n", current_time(), s->name);
+    
+    // Close write end of pipe (sensor done writing)
+    close(s->pipe_fd[1]);
+    
     free(s);
     pthread_exit(NULL);
 }
@@ -172,17 +181,46 @@ void run_device(Device* d, Device devices[]){
     printf(CYAN "[%s] " WHITE "[PROCESS] " BRIGHT_BLUE "%-20s " RESET "| " MAGENTA "Priority: " BRIGHT_MAGENTA "%-3d" RESET " | " BRIGHT_GREEN "STATE: RUNNING" RESET "             \n", current_time(), d->name, d->priority);
 
     pthread_t threads[SENSOR_COUNT];
+    SensorArg* sensor_args[SENSOR_COUNT]; // Store args for reading from pipes later
+    
+    // Create pipe for each sensor and start threads
     for(int i=0;i<SENSOR_COUNT;i++){
         SensorArg* s = malloc(sizeof(SensorArg));
         snprintf(s->name, sizeof(s->name), "%s - Sensor %d", d->name, i+1);
         s->device = d;
         s->sensor_index = i;
+        
+        // Create pipe for this sensor
+        if(pipe(s->pipe_fd) == -1){
+            printf("Error: Pipe creation failed for sensor %d!\n", i);
+            free(s);
+            continue;
+        }
+        
+        sensor_args[i] = s; // Save for reading later
         pthread_create(&threads[i], NULL, sensor_thread, s);
         sleep(1);
     }
 
+    // Wait for all threads to complete
     for(int i=0;i<SENSOR_COUNT;i++)
         pthread_join(threads[i], NULL);
+    
+    // Read data from pipes and save to device structure
+    printf(BRIGHT_CYAN BOLD "[HUB] " RESET GREEN "Reading sensor data from pipes for %s..." RESET "\n", d->name);
+    for(int i=0;i<SENSOR_COUNT;i++){
+        int sensor_data = 0;
+        read(sensor_args[i]->pipe_fd[0], &sensor_data, sizeof(int));
+        d->sensor_data[i] = sensor_data;
+        printf(BRIGHT_CYAN BOLD "[HUB] " RESET GREEN "Read from pipe | " RESET CYAN "%s " RESET YELLOW "Sensor %d: %d" RESET "\n", 
+               d->name, i+1, sensor_data);
+        
+        // Close read end of pipe
+        close(sensor_args[i]->pipe_fd[0]);
+        
+        // Free the sensor argument
+        free(sensor_args[i]);
+    }
 
     d->state = TERMINATED;
     printf(CYAN "[%s] " WHITE "[PROCESS] " BRIGHT_BLUE "%-20s " RESET "              | " YELLOW "STATE CHANGED → " RED "TERMINATED" RESET "                \n", current_time(), d->name);
