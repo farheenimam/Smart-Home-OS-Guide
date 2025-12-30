@@ -218,10 +218,10 @@ void print_project_title(){
     printf(BRIGHT_CYAN BOLD "╔═══════════════════════════════════════════════════════════════╗\n" RESET);
     printf(BRIGHT_CYAN BOLD "║" RESET);
     printf(BRIGHT_WHITE BOLD "          SMART HOME OS HUB SIMULATION SYSTEM" RESET);
-    printf(BRIGHT_CYAN BOLD "           ║\n" RESET);
+    printf(BRIGHT_CYAN BOLD "                  ║\n" RESET);
     printf(BRIGHT_CYAN BOLD "║" RESET);
     printf(WHITE "           Operating Systems Semester Project" RESET);
-    printf(BRIGHT_CYAN BOLD "                    ║\n" RESET);
+    printf(BRIGHT_CYAN BOLD "                  ║\n" RESET);
     printf(BRIGHT_CYAN BOLD "╚═══════════════════════════════════════════════════════════════╝\n" RESET);
     printf("\n");
 }
@@ -266,9 +266,9 @@ int main(){
     sleep(3);
 
     for(int i=0;i<DEVICE_COUNT;i++){
-        printf("\n" BRIGHT_CYAN "+------------------------------------------------------------------+\n" RESET);
-        printf(BRIGHT_CYAN "| " RESET BRIGHT_CYAN BOLD "[HUB] " RESET BRIGHT_YELLOW "Dispatching Device: " RESET BRIGHT_WHITE BOLD "%-42s " RESET BRIGHT_CYAN "|\n" RESET, devices[i].name);
-        printf(BRIGHT_CYAN "+------------------------------------------------------------------+\n" RESET);
+        printf("\n" BRIGHT_CYAN "+------------------------------------------------------------------------+\n" RESET);
+        printf(BRIGHT_CYAN "| " RESET BRIGHT_CYAN BOLD "      [HUB] " RESET BRIGHT_YELLOW "Dispatching Device: " RESET BRIGHT_WHITE BOLD "%-42s " RESET BRIGHT_CYAN "|\n" RESET, devices[i].name);
+        printf(BRIGHT_CYAN "+------------------------------------------------------------------------+\n" RESET);
         run_device(&devices[i], devices);
         sleep(1);
     }
