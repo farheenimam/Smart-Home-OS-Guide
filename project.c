@@ -144,7 +144,6 @@ void* sensor_thread(void* arg){
 }
 
 // ---------------- SORT DEVICES BY PRIORITY (PRIORITY QUEUE) ----------------
-// Bubble sort algorithm: Sort devices by priority (lower number = higher priority)
 void sort_devices_by_priority(Device devices[]){
     // Priority queue implementation using bubble sort
     for(int i = 0; i < DEVICE_COUNT; i++){
@@ -278,12 +277,7 @@ int main(){
     sleep(1);
 
     printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET BRIGHT_YELLOW BOLD "Applying Priority Scheduling" RESET "\n");
-    printf(BRIGHT_WHITE "+----+----------------------+----------+\n" RESET);
-    printf(BRIGHT_WHITE "| " RESET BOLD "No " RESET BRIGHT_WHITE "| " RESET BOLD "%-20s " RESET BRIGHT_WHITE "| " RESET BOLD "Priority " RESET BRIGHT_WHITE "|\n" RESET, "Device Name");
-    printf(BRIGHT_WHITE "+----+----------------------+----------+\n" RESET);
-    for(int i=0;i<DEVICE_COUNT;i++)
-        printf(BRIGHT_WHITE "| " RESET YELLOW "%-2d " RESET BRIGHT_WHITE "| " RESET CYAN "%-20s " RESET BRIGHT_WHITE "| " RESET MAGENTA "%-8d " RESET BRIGHT_WHITE "|\n" RESET, i+1, devices[i].name, devices[i].priority);
-    printf(BRIGHT_WHITE "+----+----------------------+----------+\n" RESET);
+    print_device_table(devices);
     sleep(3);
 
     for(int i=0;i<DEVICE_COUNT;i++){
@@ -311,7 +305,7 @@ int main(){
     printf(BRIGHT_CYAN BOLD "\t\t╔═══════════════════════════════════════════════════════════════╗\n" RESET);
     printf(BRIGHT_CYAN BOLD "\t\t║" RESET);
     printf(BRIGHT_WHITE BOLD "\t                SMART HOME OS HUB TERMINATED" RESET);
-    printf(BRIGHT_CYAN BOLD "                  ║\n" RESET);
+    printf(BRIGHT_CYAN BOLD "             ║\n" RESET);
     printf(BRIGHT_CYAN BOLD "\t\t╚═══════════════════════════════════════════════════════════════╝\n" RESET);
     printf("\n");
     return 0;
