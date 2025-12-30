@@ -17,13 +17,13 @@ Features:
 =========================================================================
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
-#include <string.h>
-#include <unistd.h>
-#include <time.h>
+#include <stdio.h> // printf, sprintf
+#include <stdlib.h> // malloc, free, rand, srand
+#include <pthread.h> // pthreads, mutexes
+#include <unistd.h> // sleep
+#include <time.h> // time, localtime, struct tm
 
+// Macros
 #define DEVICE_COUNT 15
 #define SENSOR_COUNT 6
 #define RESOURCE_COUNT 6
@@ -53,16 +53,16 @@ Features:
 #define TERMINATED 3
 
 // ---------------- SHARED RESOURCES ----------------
-pthread_mutex_t resources[RESOURCE_COUNT];
+pthread_mutex_t resources[RESOURCE_COUNT]; // global array of mutex lock
 char* resource_names[RESOURCE_COUNT] = {"WiFi","Power","Memory","Battery","Storage","CPU"};
 int resource_usage[RESOURCE_COUNT] = {0};
 
 // ---------------- TIME ----------------
 char* current_time() {
-    static char buf[20];
+    static char buf[20]; // memory remains valid after function returns
     time_t now = time(NULL);
-    struct tm *t = localtime(&now);
-    sprintf(buf,"%02d:%02d:%02d", t->tm_hour, t->tm_min, t->tm_sec);
+    struct tm *t = localtime(&now); // readable format
+    snprintf(buf, sizeof(buf), "%02d:%02d:%02d", t->tm_hour, t->tm_min, t->tm_sec);
     return buf;
 }
 
@@ -72,8 +72,7 @@ typedef struct {
     int priority;
     int state;
     int depends_on; // -1 if none
-    int sensor_sum[SENSOR_COUNT];
-    int sensor_count[SENSOR_COUNT];
+    int sensor_data[SENSOR_COUNT]; 
 } Device;
 
 // ---------------- SENSOR THREAD ARG ----------------
@@ -85,7 +84,6 @@ typedef struct {
 
 // ---------------- SENSOR DATA ----------------
 int generate_sensor_data(int index){
-    srand(time(NULL) + rand()%1000 + index);
     switch(index){
         case 0: return 18 + rand()%13;   // Temp
         case 1: return 20 + rand()%61;   // Humidity
@@ -100,7 +98,7 @@ int generate_sensor_data(int index){
 // ---------------- SENSOR THREAD ----------------
 void* sensor_thread(void* arg){
     SensorArg* s = (SensorArg*)arg;
-    Device* d = s->device;
+    Device* d = s->device;  // jo device sensor use krrhi hn
 
     printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " YELLOW "Requesting resources" RESET "                    \n", current_time(), s->name);
 
@@ -109,17 +107,17 @@ void* sensor_thread(void* arg){
     time_t start_wait = time(NULL);
 
     // Helps in deadlock avoidance, checks which resource is available
-    while(!acquired){
+    while(!acquired){ // Jab tk true hn
         acquired = 1;
         for(int i=0;i<RESOURCE_COUNT;i++){
-            if(pthread_mutex_trylock(&resources[i])==0){
+            if(pthread_mutex_trylock(&resources[i])==0){ // checks if the resource is unlocked
                 locked[i]=1;
                 resource_usage[i]++;
             } else {
                 acquired = 0;
             }
         }
-        if(!acquired){
+        if(!acquired){ 
             for(int i=0;i<RESOURCE_COUNT;i++)
                 if(locked[i]) { pthread_mutex_unlock(&resources[i]); locked[i]=0; }
             d->state = WAITING;
@@ -132,8 +130,7 @@ void* sensor_thread(void* arg){
 
     d->state = RUNNING;
     int data = generate_sensor_data(s->sensor_index);
-    d->sensor_sum[s->sensor_index] += data;
-    d->sensor_count[s->sensor_index]++;
+    d->sensor_data[s->sensor_index] = data;
 
     printf(CYAN "[%s] " WHITE "[THREAD] " BRIGHT_CYAN "%-35s " RESET "| " BRIGHT_GREEN "Resources Allocated" RESET " | " YELLOW "Sensor Data: " BRIGHT_YELLOW "%-3d" RESET "   \n", current_time(), s->name, data);
     sleep(1);
@@ -207,8 +204,7 @@ void print_sensor_summary(Device devices[]){
     for(int i=0;i<DEVICE_COUNT;i++){
         printf(BRIGHT_WHITE "| " RESET CYAN "%-20s" RESET, devices[i].name);
         for(int j=0;j<SENSOR_COUNT;j++){
-            int avg = devices[i].sensor_count[j]==0?0:devices[i].sensor_sum[j]/devices[i].sensor_count[j];
-            printf(BRIGHT_WHITE " | " RESET YELLOW "%-10d" RESET, avg);
+            printf(BRIGHT_WHITE " | " RESET YELLOW "%-10d" RESET, devices[i].sensor_data[j]);
         }
         printf(BRIGHT_WHITE " |\n" RESET);
     }
@@ -238,22 +234,22 @@ int main(){
         pthread_mutex_init(&resources[i], NULL);
 
     Device devices[DEVICE_COUNT] = {
-        // Name, Priority, State, Depends_on, Sensor_sum[], Sensor_count[]
-        {"Security Camera",1,READY,-1,{0},{0}},
-        {"Air Conditioner",2,READY,-1,{0},{0}},
-        {"Smart Door Lock",2,READY,0,{0},{0}},
-        {"Smart Light",3,READY,-1,{0},{0}},
-        {"Thermostat",2,READY,1,{0},{0}},
-        {"Water Heater",3,READY,-1,{0},{0}},
-        {"Refrigerator",2,READY,-1,{0},{0}},
-        {"Oven",2,READY,6,{0},{0}},
-        {"Coffee Machine",3,READY,-1,{0},{0}},
-        {"Air Purifier",2,READY,-1,{0},{0}},
-        {"Vacuum Cleaner",3,READY,-1,{0},{0}},
-        {"Sprinkler System",3,READY,-1,{0},{0}},
-        {"Fan",3,READY,-1,{0},{0}},
-        {"Heater",2,READY,-1,{0},{0}},
-        {"Door Sensor",1,READY,-1,{0},{0}}
+        // Name, Priority, State, Depends_on, Sensor_data[]
+        {"Security Camera",1,READY,-1,{0}},
+        {"Air Conditioner",2,READY,-1,{0}},
+        {"Smart Door Lock",2,READY,0,{0},},
+        {"Smart Light",3,READY,-1,{0}},
+        {"Thermostat",2,READY,1,{0}},
+        {"Water Heater",3,READY,-1,{0}},
+        {"Refrigerator",2,READY,-1,{0}},
+        {"Oven",2,READY,6,{0}},
+        {"Coffee Machine",3,READY,-1,{0}},
+        {"Air Purifier",2,READY,-1,{0}},
+        {"Vacuum Cleaner",3,READY,-1,{0}},
+        {"Sprinkler System",3,READY,-1,{0}},
+        {"Fan",3,READY,-1,{0}},
+        {"Heater",2,READY,-1,{0}},
+        {"Door Sensor",1,READY,-1,{0}}
     };
 
     printf("\n" BRIGHT_CYAN BOLD "[HUB] " RESET YELLOW "Initializing Device Table " RESET "(" BRIGHT_GREEN "STATE: READY" RESET ")\n");
@@ -293,7 +289,7 @@ int main(){
     printf("\n");
     printf(BRIGHT_CYAN BOLD "\t\t╔═══════════════════════════════════════════════════════════════╗\n" RESET);
     printf(BRIGHT_CYAN BOLD "\t\t║" RESET);
-    printf(BRIGHT_WHITE BOLD "\t\t                SMART HOME OS HUB TERMINATED" RESET);
+    printf(BRIGHT_WHITE BOLD "\t                SMART HOME OS HUB TERMINATED" RESET);
     printf(BRIGHT_CYAN BOLD "                  ║\n" RESET);
     printf(BRIGHT_CYAN BOLD "\t\t╚═══════════════════════════════════════════════════════════════╝\n" RESET);
     printf("\n");
